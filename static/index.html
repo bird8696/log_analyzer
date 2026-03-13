@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>보안 로그 분석기</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: "Segoe UI", sans-serif;
+        background: #0f1117;
+        color: #e0e0e0;
+        min-height: 100vh;
+        padding: 40px 20px;
+      }
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+      }
+      h1 {
+        text-align: center;
+        font-size: 2rem;
+        margin-bottom: 10px;
+        color: #00d4ff;
+      }
+      .subtitle {
+        text-align: center;
+        color: #888;
+        margin-bottom: 40px;
+      }
+      .card {
+        background: #1a1d27;
+        border-radius: 12px;
+        padding: 24px;
+        margin-bottom: 24px;
+        border: 1px solid #2a2d3e;
+      }
+      label {
+        display: block;
+        margin-bottom: 8px;
+        color: #aaa;
+        font-size: 0.9rem;
+      }
+      select,
+      textarea {
+        width: 100%;
+        background: #0f1117;
+        border: 1px solid #2a2d3e;
+        border-radius: 8px;
+        color: #e0e0e0;
+        padding: 12px;
+        font-size: 0.95rem;
+        margin-bottom: 16px;
+      }
+      textarea {
+        height: 180px;
+        resize: vertical;
+        font-family: "Courier New", monospace;
+      }
+      button {
+        width: 100%;
+        padding: 14px;
+        background: #00d4ff;
+        color: #0f1117;
+        border: none;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-weight: bold;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      button:hover {
+        background: #00b8d9;
+      }
+      button:disabled {
+        background: #444;
+        cursor: not-allowed;
+      }
+      .result {
+        display: none;
+      }
+      .result-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+      .badge {
+        padding: 6px 16px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: bold;
+      }
+      .badge-safe {
+        background: #1a3a2a;
+        color: #4caf50;
+      }
+      .badge-threat {
+        background: #3a1a1a;
+        color: #f44336;
+      }
+      .badge-low {
+        background: #1a2a3a;
+        color: #2196f3;
+      }
+      .badge-medium {
+        background: #3a2a1a;
+        color: #ff9800;
+      }
+      .badge-high {
+        background: #3a1a1a;
+        color: #f44336;
+      }
+      .result-title {
+        font-size: 1.2rem;
+        font-weight: bold;
+      }
+      .result-item {
+        margin-bottom: 12px;
+        padding: 12px;
+        background: #0f1117;
+        border-radius: 8px;
+      }
+      .result-item-label {
+        font-size: 0.8rem;
+        color: #888;
+        margin-bottom: 4px;
+      }
+      .result-item-value {
+        color: #e0e0e0;
+      }
+      .loading {
+        text-align: center;
+        color: #888;
+        padding: 20px;
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🔍 보안 로그 분석기</h1>
+      <p class="subtitle">Claude AI를 활용한 실시간 보안 로그 위협 분석</p>
+
+      <div class="card">
+        <label>로그 종류</label>
+        <select id="logType">
+          <option value="일반">일반</option>
+          <option value="Apache">Apache 웹서버</option>
+          <option value="Nginx">Nginx 웹서버</option>
+          <option value="Linux Syslog">Linux Syslog</option>
+          <option value="Windows Event">Windows 이벤트</option>
+          <option value="SSH">SSH</option>
+          <option value="방화벽">방화벽</option>
+        </select>
+
+        <label>로그 내용</label>
+        <textarea
+          id="logText"
+          placeholder="분석할 로그를 붙여넣으세요..."
+        ></textarea>
+
+        <button id="analyzeBtn" onclick="analyze()">🔍 분석 시작</button>
+      </div>
+
+      <div class="loading" id="loading">⏳ Claude AI가 분석 중입니다...</div>
+
+      <div class="card result" id="result">
+        <div class="result-header">
+          <span class="badge" id="threatBadge"></span>
+          <span class="badge" id="levelBadge"></span>
+          <span class="result-title" id="threatType"></span>
+        </div>
+        <div class="result-item">
+          <div class="result-item-label">📋 판단 근거</div>
+          <div class="result-item-value" id="reason"></div>
+        </div>
+        <div class="result-item">
+          <div class="result-item-label">🛡️ 권고사항</div>
+          <div class="result-item-value" id="recommendation"></div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      async function analyze() {
+        const logText = document.getElementById("logText").value.trim();
+        const logType = document.getElementById("logType").value;
+
+        if (!logText) {
+          alert("로그 내용을 입력해주세요!");
+          return;
+        }
+
+        // 로딩 시작
+        document.getElementById("analyzeBtn").disabled = true;
+        document.getElementById("loading").style.display = "block";
+        document.getElementById("result").style.display = "none";
+
+        try {
+          const response = await fetch("/analyze", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ log_text: logText, log_type: logType }),
+          });
+
+          const data = await response.json();
+
+          // 결과 표시
+          const threatBadge = document.getElementById("threatBadge");
+          const levelBadge = document.getElementById("levelBadge");
+
+          if (data.is_threat) {
+            threatBadge.textContent = "⚠️ 위협 감지";
+            threatBadge.className = "badge badge-threat";
+          } else {
+            threatBadge.textContent = "✅ 정상";
+            threatBadge.className = "badge badge-safe";
+          }
+
+          const levelMap = {
+            LOW: "badge-low",
+            MEDIUM: "badge-medium",
+            HIGH: "badge-high",
+          };
+          levelBadge.textContent = data.threat_level;
+          levelBadge.className = `badge ${levelMap[data.threat_level]}`;
+
+          document.getElementById("threatType").textContent = data.threat_type;
+          document.getElementById("reason").textContent = data.reason;
+          document.getElementById("recommendation").textContent =
+            data.recommendation;
+
+          document.getElementById("result").style.display = "block";
+        } catch (e) {
+          alert("오류 발생: " + e.message);
+        } finally {
+          document.getElementById("analyzeBtn").disabled = false;
+          document.getElementById("loading").style.display = "none";
+        }
+      }
+    </script>
+  </body>
+</html>
